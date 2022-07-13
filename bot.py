@@ -6,6 +6,7 @@ import codecs
 import asyncio
 import aiohttp
 import random
+import googletrans
 import requests
 import datetime
 import json
@@ -15,13 +16,18 @@ import secrets
 import subprocess
 import shutil
 import base64 as b64
-import googletrans
 import string
+from discord.ext import commands, tasks
+from discord.utils import get
+from discord import FFmpegPCMAudio
 from googletrans import Translator
+from discord import TextChannel
 from bs4 import BeautifulSoup
 from requests.auth import HTTPBasicAuth
-
-
+from discord_slash import SlashCommand, SlashContext
+from discord_slash.utils.manage_commands import create_option
+import pytz
+from datetime import datetime
 
 headers = {
   "user-agent": "botcommand (by roothefox on e621)"
@@ -34,22 +40,14 @@ config = configparser.ConfigParser()
 config.read('auth.ini')
 e6User = config['AUTH']['e6User']
 e6Key = config['AUTH']['e6Key']
+headersE6 = {'user-agent': f'e621-post-bot (by {e6User} on e621)'}
 
-client = commands.Bot(command_prefix='roo!', case_insensitive=True)
-
-client.remove_command('help')
-
+client = commands.Bot(command_prefix=['roo!', 'r!', 'r.'], case_insensitive=True)
+slash = SlashCommand(client, sync_commands=True)
 
 @client.event
 async def on_ready():
-	guild_count = 0
-
-	for guild in client.guilds:
-		print(f"- {guild.id} (name: {guild.name})")
-
-		guild_count = guild_count + 1
-
-		print("SampleDiscordBot is in " + str(guild_count) + " guilds.")
+    print("Roo Bot is in " + str(len(client.guilds)) + " servers")
 
 compliments = [
 'Your positivity is infectious.',
@@ -73,9 +71,13 @@ compliments = [
 ]
 
 snuggles = [
-'https://tenor.com/view/cat-love-huge-hug-big-gif-11990658',
-'https://tenor.com/view/peach-goma-new-and-sleep-gif-20279656',
-'https://tenor.com/view/milk-and-mocha-milk-mocha-blanket-cuddle-blanket-gif-18522891'
+'https://i.imgur.com/wOmoeF8.gif',
+'https://i.imgur.com/p2Jt2P5.gif',
+'https://i.imgur.com/nrdYNtL.gif',
+'https://i.imgur.com/BPLqSJC.gif',
+'https://i.imgur.com/ntqYLGl.gif',
+'https://i.imgur.com/UMm95sV.gif'
+
 ]
 
 pokemon = [
@@ -258,6 +260,12 @@ pokemon = [
 '\#151	\#151	Mew		Psychic'
 ]
 
+emails = [
+'@gmail.com',
+'@yahoo.com',
+'@outlook.com'
+]
+
 hugs = [
 'https://i.imgur.com/GuADSLm.gif',
 'https://i.imgur.com/XEs1SWQ.gif',
@@ -311,6 +319,44 @@ slaps = [
 'https://i.imgur.com/oOCq3Bt.gif'
 ]
 
+gay = [
+'https://static1.e621.net/data/14/1e/141ee5ac627e36254976a2aa8b67f421.gif',
+'https://static1.e621.net/data/f9/9d/f99d58cf4dfbc773d2c425ccc2573449.gif',
+'https://static1.e621.net/data/77/dd/77dd5f1d334c881ad21fbd007f22a859.gif',
+'https://static1.e621.net/data/9f/a1/9fa1f35bf0f4596cc2660d71a10835ff.gif',
+'https://static1.e621.net/data/d2/34/d23494e8aac90efb67a2fecb0bae7afc.gif',
+'https://static1.e621.net/data/b7/24/b72487950476054cdb68db27f50bf0dc.gif',
+'https://static1.e621.net/data/5d/9d/5d9d03ca4b68671b943fd24039dd58b6.gif',
+'https://static1.e621.net/data/43/b4/43b4ac6433d110a4a61fa38db45e32ed.gif',
+'https://static1.e621.net/data/6b/70/6b70d187f6add9a79dc690d178b26e16.gif',
+'https://static1.e621.net/data/64/3e/643e5ad779fa801e07d70881bbaccad8.gif'
+]
+
+straight = [
+'https://static1.e621.net/data/de/4d/de4ded88c66afd31e55ba918f8737143.gif',
+'https://static1.e621.net/data/55/b3/55b3e1023c25b0f63839b99001580579.gif',
+'https://static1.e621.net/data/f7/dc/f7dce7f239cf56f405081172ecac10ca.gif',
+'https://static1.e621.net/data/6b/df/6bdf27e9e208629476d94cb5a2fe1476.gif',
+'https://static1.e621.net/data/bc/93/bc93f5d40ed465ddaf99d3a958bf57cc.gif',
+'https://static1.e621.net/data/4a/bd/4abdacfcda99337911887ed26d5a67a3.gif',
+'https://static1.e621.net/data/e4/d9/e4d9d2d3c6eaa9e87f818f50c44e9a93.gif',
+'https://static1.e621.net/data/64/1a/641acf2c63ed729527594da161fa8ee0.gif',
+'https://static1.e621.net/data/aa/fc/aafc68e6bac81d7265328783df536705.gif'
+]
+
+lesbian = [
+'https://static1.e621.net/data/36/d1/36d1aec3b183f3cff4e4c4c06c97f121.png',
+'https://static1.e621.net/data/b7/c7/b7c74421cfdd5dec3e76e0c5e758715e.gif',
+'https://static1.e621.net/data/b3/85/b3850f7cf7433bd213c6252b45d92e10.gif',
+'https://static1.e621.net/data/4b/b3/4bb3f60f8f22352ca8995bbb98f98163.gif',
+'https://static1.e621.net/data/06/f7/06f79f963dbc79b39a7635f3bb40b8c3.gif',
+'https://static1.e621.net/data/40/0c/400cb1eb06a31d7e48a9a7fd361aa8ef.gif',
+'https://static1.e621.net/data/b1/00/b1001bdf2b3bd862aeacb9204b51161d.gif',
+'https://static1.e621.net/data/dd/d8/ddd86a777e5361b4bffc51e7082fe522.gif',
+'https://static1.e621.net/data/a5/c8/a5c8bb47a3578ae673ebd25bf9e7779a.gif',
+'https://static1.e621.net/data/82/ea/82ea237d59942e9adf0e7bf704e5251d.gif'
+]
+
 pats = [
 'https://i.imgur.com/UWbKpx8.gif',
 'https://i.imgur.com/2lacG7l.gif',
@@ -322,10 +368,13 @@ pats = [
 ]
 
 boops = [
-'https://i.imgur.com/tjko37n.gif',
-'https://i.imgur.com/y6JJrpB.gif',
-'https://i.imgur.com/kpM9KXa.mp4',
-'https://d.facdn.net/art/troutsworth/1488278723/1426280866.troutsworth_boop2.gif'
+'https://static1.e926.net/data/b0/a8/b0a82db8bfc9e34f8339f358926862b1.gif',
+'https://static1.e926.net/data/a1/2f/a12fc527519cfa211d8cf0f624e43e4f.gif',
+'https://static1.e926.net/data/e6/75/e67586575f6dfd2b7e89c1fbf269684b.gif',
+'https://static1.e926.net/data/c4/e0/c4e0e8a236fb3ef68ce1df34fedb766f.gif',
+'https://static1.e926.net/data/0f/33/0f33d470edfa6d19e982455fb9f8c48e.gif',
+'https://static1.e926.net/data/fe/a7/fea79c2ffeb6a3e47024bfa76539c82d.gif',
+'https://static1.e926.net/data/cb/a3/cba363c4a6abdd6641350911f82761f2.gif'
 ]
 
 rpss = [
@@ -336,10 +385,11 @@ rpss = [
 
 @client.event
 async def on_message(message):
-	if message.content.lower() == "hello":
-		await message.channel.send("hey dirtbag")
+    await client.change_presence(status=discord.Status.online, activity=discord.Game("in " + str(len(client.guilds)) + " servers, owner: roo fox#0001"))
+    if message.content.lower() == "hello":
+        await message.channel.send("hey dirtbag")
 
-	await client.process_commands(message)
+    await client.process_commands(message)
 
 @client.event
 async def on_member_join(member):
@@ -359,7 +409,7 @@ async def clear_error(ctx, error):
     if isinstance(error, commands.MissingPermissions):
         await ctx.send("You cant do that!")
 
-@client.command(name='ping', pass_context=True)
+@client.command(name='ping', brief='pong', description='simple pong lol', pass_context=True)
 async def ping(context):
     str(context.message.author), (context.message.channel.name)
     await context.message.channel.send("Pong!")
@@ -449,65 +499,169 @@ async def cuteCheck(context, member: discord.Member):
     cute = random.randint(0, 100)
     await context.message.channel.send(f'{member.name} is {cute}% cute.')
 
+blacklisted_tags = [
+    "gore",
+    "scat",
+    "watersports",
+    "fart",
+    "fart_fetish",
+    "fart_cloud",
+    "vore",
+    "diaper",
+    "peeing"
+]
+
+def is_valid(tags, ID=False):
+    if "cub" in tags or "young" in tags:
+        if ID:
+            cubEmbed = discord.Embed(title='Command termination.', colour=redColour)
+            cubEmbed.add_field(name='Post contains cub tag.', value='Cub is a prohibited tag, this cannot be overridden.')
+            return False, cubEmbed
+        else:
+            return False
+    elif any(x in tags for x in blacklisted_tags):
+        if ID:
+            cubEmbed = discord.Embed(title='Command termination.', colour=redColour)
+            cubEmbed.add_field(name='Post contains a blacklisted tag.', value='Default blacklist cannot be overridden.')
+            return False, cubEmbed
+        return False
+    else:
+        if ID:
+            return True, ""
+        return True
+
 @client.command(name="post", pass_context = True)
 async def post(context, postID=None):
-    str(context.message.author), (context.message.channel.name) 
+    senderMsg = context.message
+    _is_artist = False
+    _isvalid = True
     if postID == None:
-        await context.message.channel.send('Please make sure you specify a post ID!')
+        await context.message.channel.send('Please make sure you specify a query! This may be an artist name, post ID, or just a tag, you can chain tags together. For example: canine+male')
     elif postID == 'random':
-        rq = requests.get(f'https://e621.net/posts/random.json?', headers=headers, auth=('roothefox', f'{e6Key}'))
-        rqJSON = rq.json()
-    else:
-        rq = requests.get(f'https://e621.net/posts/{postID}.json', headers=headers, auth=('roothefox', f'{e6Key}'))
-        rqJSON = rq.json()
-
-        keyerror = False
-        postid = rqJSON['post']['id']
-
-        try:
-            score = rqJSON['post']['score']['total']
-        except KeyError:
-            keyerror = True
-        
-        if keyerror:
-            await context.message.channel.send('Invalid ID!')
-        
+        rq = requests.get(f'https://e621.net/posts/random.json?', headers=headersE6, auth=(e6User, f'{e6Key}'))
+        if rq.status_code == 404:
+            pass
         else:
+            while not is_valid(rq.json()['post']['tags']['general']):
+                rq = requests.get(f'https://e621.net/posts/random.json?', headers=headersE6, auth=(e6User, f'{e6Key}'))
+                time.sleep(1)
+    elif str(postID).isdigit():
+        rq = requests.get(f'https://e621.net/posts/{postID}.json', headers=headersE6, auth=(e6User, f'{e6Key}'))
+        if rq.status_code == 404:
+            pass
+        else:
+            isvalid, embed = is_valid(rq.json()['post']['tags']['general'], ID=True)
+            if not isvalid:
+                _isvalid = False
+                await senderMsg.delete()
+                await context.message.channel.send(embed=embed)
+    else:
+        attempted_tags = postID.split('+')
+        if any(x in blacklisted_tags for x in attempted_tags):
+            await senderMsg.delete()
+            BlacklistEmbed = discord.Embed(title='Command termination.', colour=redColour)
+            BlacklistEmbed.add_field(name='Post contains a blacklisted tag.', value='Default blacklist cannot be overridden.')
+            await context.message.channel.send(embed=BlacklistEmbed)
+        else:
+            postID = postID.replace(':', '%3A')
+            rq = requests.get(f'https://e621.net/posts.json?tags={postID}+order%3Arandom+limit%3A1', headers=headersE6, auth=(e6User, f'{e6Key}'))
+            if rq.status_code == 404:
+                pass
+            else:
+                while not is_valid(rq.json()['posts'][0]['tags']['general']):
+                    rq = requests.get(f'https://e621.net/posts.json?tags={postID}+order%3Arandom+limit%3A1', headers=headersE6, auth=(e6User, f'{e6Key}'))
+                    time.sleep(1)
+                _is_artist = True
+    if rq.status_code == 200:
+        rqJSON = rq.json()
+
+        if _is_artist:
+            url = rqJSON['posts'][0]['file']['url']
+            md5sum = rqJSON['posts'][0]['file']['md5']
+            post = rqJSON['posts'][0]['sample']['url']
+            tags = rqJSON['posts'][0]['tags']['general']
+            postid = rqJSON['posts'][0]['id']
+            artist = rqJSON['posts'][0]['tags']['artist']
+            rating = rqJSON['posts'][0]['rating']
+            res = f"{rqJSON['posts'][0]['file']['width']}x{rqJSON['posts'][0]['file']['height']}"
+        else:
+            url = rqJSON['post']['file']['url']
+            md5sum = rqJSON['post']['file']['md5']
+            post = rqJSON['post']['sample']['url']
+            tags = rqJSON['post']['tags']['general']
+            postid = rqJSON['post']['id']
             artist = rqJSON['post']['tags']['artist']
-            url = rqJSON['post']['sample']['url']
+            rating = rqJSON['post']['rating']
+            res = f"{rqJSON['post']['file']['width']}x{rqJSON['post']['file']['height']}"
+        
+        if _isvalid:
+            ratings = {
+                'q': 'Questionable',
+                'e': 'Explicit',
+                's': 'Safe'
+            }
+            keyerror = False
+
+            _final_rating = ratings[rating]
+
+            try:
+                if _is_artist:
+                    score = rqJSON['posts'][0]['score']['total']
+                else:
+                    score = rqJSON['post']['score']['total']
+            except KeyError:
+                keyerror = True
+            
+            if keyerror:
+                await context.message.channel.send('Invalid ID!')
+
+            if len(artist) > 1:
+                artist = ", ".join(artist)
+            elif len(artist) == 1:
+                artist = artist[0]
+            else:
+                artist = 'Not specified.'
 
             if url == None:
                 await context.message.channel.send('This post was deleted from e6.')
             else:
-                if rqJSON['post']['rating'] == 'e' and (context.channel.is_nsfw()) == False:
-                    await context.message.channel.send('Explicit images are not allowed here.')
+                open_content = f'Open content ({res} {url.split(".")[-1].upper()})'
+
+                if rating == 'e' and not context.channel.is_nsfw():
+                    await context.message.channel.send(context, 'Explicit images are not allowed here.')
                     
-                elif rqJSON['post']['rating'] == 'e' and (context.channel.is_nsfw()) == True:
-                    postEmbed = discord.Embed(title=f'e621 | Post: {postid} | Score: {score} | Artist: {artist[0]}')
-                    postEmbed = postEmbed.set_image(url=url)
+                elif rating == 'e' or rating == 'q' and context.channel.is_nsfw():
+                    postEmbed = discord.Embed(title=f'{open_content}', url=f'{url}')
+                    postEmbed.add_field(name='Post stats: ', value=f'Rating: {_final_rating} | Post: {postid} | Score: {score} | Artist(s): {artist}', inline=False)
+                    postEmbed = postEmbed.set_image(url=post)
 
-                    try:
-                        await context.message.channel.send(embed=postEmbed)
-                    except discord.errors.HTTPException:
-                        await context.message.channel.send("400 Bad Request!")
+                elif rating == 's':
+                    postEmbed = discord.Embed(title=f'{open_content}', url=f'{url}')
+                    postEmbed.add_field(name='Post stats: ', value=f'Rating: {_final_rating} | Post: {postid} | Score: {score} | Artist(s): {artist}', inline=False)
+                    postEmbed = postEmbed.set_image(url=post)
 
-                elif rqJSON['post']['rating'] == 's':
-                    postEmbed = discord.Embed(title=f'e621 | Post: {postid} | Score: {score} | Artist:{artist[0]}')
-                    postEmbed = postEmbed.set_image(url=url)
+                postEmbed.set_footer(text=f'MD5sum: {md5sum}')
 
-                    try:
-                        await context.message.channel.send(embed=postEmbed)
-                    except discord.errors.HTTPException:
-                        await context.message.channel.send("400 Bad Request!")
+                try:
+                    await context.message.channel.send(embed=postEmbed)
+                except discord.errors.HTTPException:
+                    await context.message.channel.send("400 Bad Request!")
+    
+    else:
+        await context.message.channel.send(f'Status code {rq.status_code} recieved!')
 
-@client.command(name= "eightball", pass_context=True)
-async def eightball(context, text=None):
-    str(context.message.author), (context.message.channel.name)
+@slash.slash(name="eightball",
+            description="ask a question and i'll answer it")
+async def _eightball(context: SlashContext, text=None):
     if text == None:
-        await context.message.channel.send('please provide a message so i can give you an answer UwU')
+        await context.send('please provide a message so i can give you an answer UwU')
     else:
         randomthing = secrets.choice(baguette)
-        await context.message.channel.send(randomthing)
+        embed = discord.Embed(title='eightball')
+        embed.add_field(name='question:', value=f'{text}')
+        embed.add_field(name='answer:', value=f'{randomthing}')
+
+        await context.send(embed = embed)
 
 @client.command(name='cringe', pass_context=True)
 async def cringe (context):
@@ -523,50 +677,12 @@ async def randompokemon(context):
 @client.command(name = 'invite', pass_context=True)
 async def invite (context):
         join = discord.Embed(name='join')
-        join.add_field(name='click below to invite the bot\nIm in ' + str(len(client.guilds)) + ' servers', value='[invite](https://discord.com/api/oauth2/authorize?client_id=675609879083483136&permissions=0&scope=bot)')
-        join.set_image(url= 'https://cdn.discordapp.com/avatars/675609879083483136/7b1342f2946db02d9d0f23a0819e0091.webp?size=1024')
+        join.add_field(name='click below to invite the bot\nIm in ' + str(len(client.guilds)) + ' servers', value='[invite](https://discord.com/api/oauth2/authorize?client_id=675609879083483136&permissions=8&scope=bot%20applications.commands)')
+        join.set_image(url= 'https://cdn.discordapp.com/avatars/675609879083483136/9169e12dc1e32c509a495bb93f1624e9.webp?size=1024')
 
         await context.message.channel.send(embed = join)
 
-@client.command(name = 'help',pass_context=True)
-async def help(context):
-    str(context.message.author), (context.message.channel.name)
-    helps = discord.Embed(title='bot command information')
-    helps = helps.add_field(name= 'what can i help you with today?', value= 'basic commands = roo!helpbasic\naction commands = roo!helpaction\nmoderation commands = roo!helpmod\nrandom commands = roo!helprandom')
-
-    await context.message.channel.send(embed = helps)
-
-@client.command(name= 'helpbasic', pass_context=True)
-async def helpbasic (context):
-    str(context.message.author), (context.message.channel.name)
-    basichelp = discord.Embed(title= 'basic commands list')
-    basichelp = basichelp.add_field(name= 'here are some basic commands', value= 'roo!help = Help command\nroo!invite = sends an invite link\nroo!user_count = allows you to see the amount of users are in your server\nroo!avatar = sends a picture of your/mentioned users awatar\nroo!post = sends a post from e621 with a specific post id(NSFW content only in NSFW channels)\nroo!cute = tells you how cute a mentioned user is\nroo!eightball = simply an 8ball command lol', inline=False)
-
-    await context.message.channel.send(embed = basichelp)
-
-@client.command(name= 'helpmod', pass_context=True)
-async def helpmod(context):
-    str(context.message.author), (context.message.channel.name)
-    modhelp = discord.Embed(title= 'moderation commands list')
-    modhelp = modhelp.add_field(name= 'here are some moderation commands', value= 'roo!ban = allows you to ban a mentioned user\nroo!change_nick = allows you to change your/someones nickname\nroo!kick = allows you to kick a mentioned user\nmore moderation commands coming soon', inline=False)
-
-    await context.message.channel.send(embed = modhelp)
-
-@client.command(name= 'helpaction', pass_context=True)
-async def helpaction (context):
-    str(context.message.author), (context.message.channel.name)
-    actionhelp = discord.Embed(title= 'action commands list')
-    actionhelp = actionhelp.add_field(name= 'here are some action commands', value= 'roo!hug = allows you to hug a mentioned user\nroo!kiss = allows you to kiss a mentioned user\nroo!kill = ig kill someone lol..\nroo!slap = slap... someone for probably no reason at all\nmore action commands like pat coming soon', inline=False)
-
-    await context.message.channel.send(embed = actionhelp)
-
-@client.command(name= 'helprandom', pass_context=True)
-async def helprandom(context):
-    str(context.message.author), (context.message.channel.name)
-    randomhelp = discord.Embed(title= 'random commands list')
-    randomhelp = randomhelp.add_field(name= 'here is a list of random commands', value= 'roo!randompokemon = sends a random gen 1 pokemon with a bit of information\nroo!rn = gives you a random number from 1 to 1000', inline=False)
-
-    await context.message.channel.send(embed = randomhelp)
+oop = random.randint(1, 1000)
 
 @client.command(name= 'kill', pass_context=True)
 async def kill(context, person=None):
@@ -578,10 +694,14 @@ async def kill(context, person=None):
 
 @client.command(name= 'amibored')
 async def amibored(context):
-    str(context.message.author), (context.message.channel.name)
-    await context.message.channel.send('yes')
+    shit = [
+    'yes',
+    'no'
+    ]
 
+    choose = secrets.choice(shit)
 
+    await context.message.channel.send(choose)
 
 @client.command(name= 'slap', pass_context= True)
 async def slap(context, member: discord.Member):
@@ -593,11 +713,6 @@ async def slap(context, member: discord.Member):
 
     slapples = slapples.set_image(url= slapers)
     await context.message.channel.send(embed = slapples)
-
-@client.command(name= 'joinserver', pass_context=True)
-async def joinserver(context):
-    str(context.message.author), (context.message.channel.name)
-    await context.message.channel.send('join the official roo cafe server https://discord.gg/WEpnkCJuxJ')
 
 @client.command(name= 'pat', pass_context=True)
 async def pat(context, member: discord.Member):
@@ -625,18 +740,6 @@ async def boop(context, member: discord.Member):
 @client.command(name= 'servers', pass_context=True)
 async def servers(context):
     await context.message.channel.send("I'm in " + str(len(client.guilds)) + " servers")
-
-@client.command(aliases=['tr'])
-async def translate(context, lang_to, *args):
-    str(context.message.author), (context.message.channel.name)
-    lang_to = lang_to.lower()
-    if lang_to not in googletrans.LANGUAGES and lang_to not in googletrans.LANGCODES:
-        raise commands.BadArgument("Invalid language to translate text to")
-
-    text = ' '.join(args)
-    translator = googletrans.Translator()
-    text_translated = translator.translate(text, dest=lang_to).text
-    await context.send(text_translated)
 
 @client.command(name='b64e', pass_context=True)
 async def b64e(context):
@@ -686,27 +789,79 @@ async def updateOStatus(context):
             await client.change_presence(status=discord.Status.invisible, activity=original_status)
         elif status == 'on':
             await client.change_presence(status=discord.Status.online, activity=original_status)
+        elif status == 'mb':
+            await client.change_presence(status=discord.Status.online, activity=original_status)
     else:
         await context.message.channel.send('no')
 
 @client.command()
 async def rename(context, name):
-   str(context.message.author), (context.message.channel.name)
-   await client.user.edit(username=name)
+    if context.message.author.id == 274270850830696448:
+        await client.user.edit(username=name)
+    else:
+        await context.message.channel.send('no')
 
 @client.command(name= 'ship', pass_context=True)
 async def ship(context, member: discord.Member=None):
     num = random.randint(0, 100)
+    
 
     if member == None:
         await context.message.channel.send("please mention someone so i can find out how much you fit with the other") 
     else:
         ship = discord.Embed(title='love percentage')
-        ship.add_field(name= 'command author', value= f'{context.message.author}')
-        ship.add_field(name=':RooHug:', value=f'{num}%')
-        ship.add_field(name='mentioned user', value=f'{member.name}')
-
-        await context.message.channel.send(embed = ship)
+        if num <= 10 and num >= 0:
+            ship.add_field(name= 'command author', value= f'{context.message.author}')
+            ship.add_field(name=f'{num}%', value='♥♡♡♡♡♡♡♡♡♡')
+            ship.add_field(name='mentioned user', value=f'{member.name}')
+            await context.message.channel.send(embed = ship)
+        elif num <= 20 and num >= 11:
+            ship.add_field(name= 'command author', value= f'{context.message.author}')
+            ship.add_field(name=f'{num}%', value='♥♥♡♡♡♡♡♡♡♡')
+            ship.add_field(name='mentioned user', value=f'{member.name}')
+            await context.message.channel.send(embed = ship)
+        elif num <= 30 and num >= 21:
+            ship.add_field(name= 'command author', value= f'{context.message.author}')
+            ship.add_field(name=f'{num}%', value='♥♥♥♡♡♡♡♡♡♡')
+            ship.add_field(name='mentioned user', value=f'{member.name}')
+            await context.message.channel.send(embed = ship)
+        elif num <= 40 and num >= 31:
+            ship.add_field(name= 'command author', value= f'{context.message.author}')
+            ship.add_field(name=f'{num}%', value='♥♥♥♥♡♡♡♡♡♡')
+            ship.add_field(name='mentioned user', value=f'{member.name}')
+            await context.message.channel.send(embed = ship)
+        elif num <= 50 and num >= 41:
+            ship.add_field(name= 'command author', value= f'{context.message.author}')
+            ship.add_field(name=f'{num}%', value='♥♥♥♥♥♡♡♡♡♡')
+            ship.add_field(name='mentioned user', value=f'{member.name}')
+            await context.message.channel.send(embed = ship)
+        elif num <= 60 and num >= 51:
+            ship.add_field(name= 'command author', value= f'{context.message.author}')
+            ship.add_field(name=f'{num}%', value='♥♥♥♥♥♥♡♡♡♡')
+            ship.add_field(name='mentioned user', value=f'{member.name}')
+            await context.message.channel.send(embed = ship)
+        elif num <= 70 and num >= 61:
+            ship.add_field(name= 'command author', value= f'{context.message.author}')
+            ship.add_field(name=f'{num}%', value='♥♥♥♥♥♥♥♡♡♡')
+            ship.add_field(name='mentioned user', value=f'{member.name}')
+            await context.message.channel.send(embed = ship)
+        elif num <= 80 and num >= 71:
+            ship.add_field(name= 'command author', value= f'{context.message.author}')
+            ship.add_field(name=f'{num}%', value='♥♥♥♥♥♥♥♥♡♡')
+            ship.add_field(name='mentioned user', value=f'{member.name}')
+            await context.message.channel.send(embed = ship)
+        elif num <= 90 and num >= 81:
+            ship.add_field(name= 'command author', value= f'{context.message.author}')
+            ship.add_field(name=f'{num}%', value='♥♥♥♥♥♥♥♥♥♡')
+            ship.add_field(name='mentioned user', value=f'{member.name}')
+            await context.message.channel.send(embed = ship)
+        elif num <= 1000 and num >= 91:
+            ship.add_field(name= 'command author', value= f'{context.message.author}')
+            ship.add_field(name=f'{num}%', value='♥♥♥♥♥♥♥♥♥♥')
+            ship.add_field(name='mentioned user', value=f'{member.name}')
+            await context.message.channel.send(embed = ship)
+        else:
+            await context.message.channel.send(f'test {num}')
 
 @client.command(name='rps')
 async def rps(context, *, message=None):
@@ -769,9 +924,10 @@ async def rps(context, *, message=None):
 @client.command(name='gen', pass_context=True)
 async def gen(context):
 
-    
+    mailend = secrets.choice(emails)
+
     username = ''.join(random.sample(string.ascii_lowercase,16))
-    email = username + '@yahoo.com'
+    email = username + mailend
     password = ''.join(random.sample(string.ascii_letters,8))
     embeds = discord.Embed(name='account geterator')
     embeds.add_field(name=f'{email}', value=f'{password}')
@@ -786,7 +942,7 @@ def scram(content):
 
 @client.command(name='scramble', pass_context=True)
 async def scramble(context):
-    ctn = context.message.content[14:]
+    ctn = context.message.content[13:]
     newMsg = scram(ctn)
     scramEmbed = discord.Embed(title='Scrambler')
     scramEmbed.add_field(name='Original : ', value=ctn)
@@ -797,7 +953,6 @@ async def scramble(context):
 async def vote(context):
     voting = discord.Embed(title='vote')
     voting.add_field(name='vote for our bot at:', value='https://top.gg/bot/675609879083483136\nor https://discordbotlist.com/bots/roo-bot')
-    voting.add_field(name='vote for the server at:', value='https://discords.com/servers/776094838511894568')
 
     await context.message.channel.send(embed = voting)
 
@@ -842,7 +997,200 @@ async def snuggle (context, member: discord.Member):
     snuggies.set_image(url= random_link)
     await context.message.channel.send(embed = snuggies)
 
+@client.command(name='info', pass_context=True)
+async def info(context):
+    emb = discord.Embed(name='Information')
+    emb.add_field(name='this bot was proudly brought to you by:', value='roo fox#0001')
+    emb.add_field(name="if you don't have access to slash commands", value='[reinvite me here](https://discord.com/api/oauth2/authorize?client_id=675609879083483136&permissions=8&scope=bot%20applications.commands)')
+    await context.message.channel.send(embed = emb)
 
+
+@client.command(aliases= ['purge','delete'])
+@commands.has_permissions(manage_messages=True)
+async def clear(ctx, amount=None): # Set default value as None
+    if amount == None:
+        await ctx.channel.purge(limit=1000000)
+    else:
+        try:
+            int(amount)
+        except: # Error handler
+            await ctx.send('Please enter a valid integer as amount.')
+        else:
+            await ctx.channel.purge(limit=amount)
+
+@client.command(name='fuck')
+async def fuck(context, mention: discord.Member=None, message=None):
+    
+    if (context.channel.is_nsfw()) == False:
+        await context.message.channel.send('nsfw command, may not be used outside of nsfw area')
+    elif (context.channel.is_nsfw()) == True:
+        if mention == None:
+            await context.message.channel.send('please mention someone to fuck')
+        elif message == None:
+            await context.message.channel.send('please choose between gay, lesbian or straight')
+        else:
+            if message == 'gay':
+                gae = discord.Embed(title='you naughty', description='')
+                gae.add_field(name=f'{context.message.author} fucked', value =f'{mention.name}')
+                gaylink = secrets.choice(gay)
+                gae.set_image(url = gaylink)
+
+                await context.message.channel.send(embed = gae)
+            elif message == 'straight':
+                stra = discord.Embed(title='you naughty', description='')
+                stra.add_field(name=f'{context.message.author} fucked', value =f'{mention.name}')
+                straightlink = secrets.choice(straight)
+                stra.set_image(url = straightlink)
+
+                await context.message.channel.send(embed =stra)                
+            elif message == 'lesbian':
+                lesb = discord.Embed(title='you naughty', description='')
+                lesb.add_field(name=f'{context.message.author} fucked', value =f'{mention.name}')
+                lesblink = secrets.choice(lesbian)
+                lesb.set_image(url = lesblink)
+
+                await context.message.channel.send(embed = lesb)     
+def fake_token():
+    token = secrets.token_urlsafe(66)
+    while sum(x == '_' for x in token) < 3:
+        token = secrets.token_urlsafe(66)
+    token = token.replace('_', '.')
+    return token
+
+@client.command(name='hack')
+async def hack(context, member:discord.Member):
+    
+    if member == None:
+        await context.message.channel.send('please mention someone to hack')
+    else:
+        msg = await context.message.channel.send('starting hack, please stand by')
+        time.sleep(3)
+        await msg.edit(content=f'hacking {member.name}')
+        time.sleep(3)
+        await msg.edit(content=f'gathering token for {member.name}\n:black_large_square::black_large_square::black_large_square::black_large_square::black_large_square::black_large_square::black_large_square::black_large_square::black_large_square::black_large_square:')
+        time.sleep(1)
+        await msg.edit(content=f'gathering token for {member.name}\n:white_large_square::black_large_square::black_large_square::black_large_square::black_large_square::black_large_square::black_large_square::black_large_square::black_large_square::black_large_square:')
+        time.sleep(1)
+        await msg.edit(content=f'gathering token for {member.name}\n:white_large_square::white_large_square::black_large_square::black_large_square::black_large_square::black_large_square::black_large_square::black_large_square::black_large_square::black_large_square:')
+        time.sleep(1)
+        await msg.edit(content=f'gathering token for {member.name}\n:white_large_square::white_large_square::white_large_square::black_large_square::black_large_square::black_large_square::black_large_square::black_large_square::black_large_square::black_large_square:')
+        time.sleep(1)
+        await msg.edit(content=f'gathering token for {member.name}\n:white_large_square::white_large_square::white_large_square::white_large_square::black_large_square::black_large_square::black_large_square::black_large_square::black_large_square::black_large_square:')
+        time.sleep(1)
+        await msg.edit(content=f'gathering token for {member.name}\n:white_large_square::white_large_square::white_large_square::white_large_square::white_large_square::black_large_square::black_large_square::black_large_square::black_large_square::black_large_square:')
+        time.sleep(1)
+        await msg.edit(content=f'gathering token for {member.name}\n:white_large_square::white_large_square::white_large_square::white_large_square::white_large_square::white_large_square::black_large_square::black_large_square::black_large_square::black_large_square:')
+        time.sleep(1)
+        await msg.edit(content=f'gathering token for {member.name}\n:white_large_square::white_large_square::white_large_square::white_large_square::white_large_square::white_large_square::white_large_square::black_large_square::black_large_square::black_large_square:')
+        time.sleep(1)
+        await msg.edit(content=f'gathering token for {member.name}\n:white_large_square::white_large_square::white_large_square::white_large_square::white_large_square::white_large_square::white_large_square::white_large_square::black_large_square::black_large_square:')
+        time.sleep(1)
+        await msg.edit(content=f'gathering token for {member.name}\n:white_large_square::white_large_square::white_large_square::white_large_square::white_large_square::white_large_square::white_large_square::white_large_square::white_large_square::black_large_square:')
+        time.sleep(1)
+        await msg.edit(content=f'gathering token for {member.name}\n:white_large_square::white_large_square::white_large_square::white_large_square::white_large_square::white_large_square::white_large_square::white_large_square::white_large_square::white_large_square:')
+        time.sleep(1)
+        tken = discord.Embed(title='token:', description=fake_token())
+
+        await msg.edit(content='gathered token:')
+        await msg.edit(embed = tken)
+
+        time.sleep(1)
+        await msg.edit(content='hacking password')
+        time.sleep(0.5)
+        await msg.edit(content='hacking password.')
+        time.sleep(0.5)
+        await msg.edit(content='hacking password..')
+        time.sleep(0.5)
+        await msg.edit(content='hacking password...')
+        time.sleep(0.5)
+        await msg.edit(content='hacking password')
+        time.sleep(0.5)
+        await msg.edit(content='hacking password.')
+        time.sleep(0.5)
+        password = ''.join(random.sample(string.ascii_letters,8))
+        tken.add_field(name='password:', value=f'{password}')
+
+        await msg.edit(embed = tken)
+        time.sleep(1)
+        await msg.edit(content = 'gathering email, please stand by.')
+        time.sleep(1)
+        await msg.edit(content = 'gathering email, please stand by..')
+        time.sleep(1)
+        await msg.edit(content = 'gathering email, please stand by...')
+        time.sleep(1)
+        await msg.edit(content = 'gathering email, please stand by')
+        time.sleep(1)
+        await msg.edit(content = 'gathering email, please stand by.')
+        time.sleep(1)
+        await msg.edit(content = 'gathering email, please stand by..')
+        time.sleep(1)
+        await msg.edit(content = 'gathering email, please stand by...')
+        time.sleep(1)
+        await msg.edit(content = 'gathering email, please stand by')
+        time.sleep(1)
+        await msg.edit(content = 'gathering email, please stand by.')
+        time.sleep(1)
+        mailend = secrets.choice(emails)
+
+        username = ''.join(random.sample(string.ascii_lowercase,16))
+        email = username + mailend
+
+        tken.add_field(name='email address:', value=f'{email}')
+
+        await msg.edit(embed = tken)
+        time.sleep(1)
+        await msg.edit(content='lastly, gathering ip address')
+        time.sleep(1)
+        await msg.edit(content='lastly, gathering ip address.')
+        time.sleep(1)
+        await msg.edit(content='lastly, gathering ip address..')
+        time.sleep(1)
+        await msg.edit(content='lastly, gathering ip address...')
+        time.sleep(1)
+        await msg.edit(content='lastly, gathering ip address')
+        time.sleep(1)
+        await msg.edit(content='lastly, gathering ip address.')
+        time.sleep(1)
+        await msg.edit(content='lastly, gathering ip address..')
+        time.sleep(1)
+        await msg.edit(content='lastly, gathering ip address...')
+        time.sleep(1)
+        num1 = random.randint(1, 255)
+        num2 = random.randint(1, 255)
+        num3 = random.randint(1, 255)
+        num4 = random.randint(1, 255)
+
+        tken.add_field(name='ip address:', value=f'{num1}.{num2}.{num3}.{num4}')
+
+        await msg.edit(embed = tken)
+        await msg.edit(content = 'hack done!')
+
+@client.command(name='rn2')
+async def rn2(context, number1=None, number2=None):
+    if number1 is None or number2 is None:
+        await context.message.channel.send("you need 2 numbers for this command to work")
+    else:
+        if number1.isdigit() and number2.isdigit():
+            number1 = int(number1)
+            number2 = int(number2)
+            if number2 < number1:
+                e = random.randint(number2, number1)
+                await context.message.channel.send(f'seeing as {number2} is lower than {number1}, i have switched them around for you\nRandom number chosen: {e}')
+            else:
+                a = random.randint(number1, number2)
+                await context.message.channel.send(f"Random number chosen: {a}")
+        else:
+            await context.message.channel.send("Lower and upper bound must be integers.")
+
+@tasks.loop(seconds=86400)
+async def datetask():
+    tz = pytz.timezone('Europe/Berlin')
+    berlin_current_datetime = datetime.now(tz)
+    await client.wait_until_ready()
+    channel = client.get_channel(895690695573123153)
+    await channel.send(f"current date {berlin_current_datetime}")
+
+datetask.start()
 
 config.read('auth.ini')
 token = config['AUTH']['token']
